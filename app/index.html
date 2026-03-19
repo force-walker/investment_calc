@@ -105,11 +105,11 @@
         <div class="row two">
           <label>
             Monetary weight (0-100)
-            <input id="moneyWeight" type="number" min="0" max="100" step="1" value="60" />
+            <input id="moneyWeight" type="number" min="0" max="100" step="1" value="80" />
           </label>
           <label>
             Non-monetary weight (0-100)
-            <input id="nonMoneyWeight" type="number" min="0" max="100" step="1" value="40" readonly />
+            <input id="nonMoneyWeight" type="number" min="0" max="100" step="1" value="20" />
           </label>
         </div>
         <p class="small">Non-monetary weight auto-updates to keep total at 100.</p>
@@ -167,10 +167,17 @@
         return Math.min(max, Math.max(min, n));
       }
 
-      function updateWeights() {
-        const moneyWeight = clamp(Number(moneyWeightInput.value || 0), 0, 100);
-        moneyWeightInput.value = moneyWeight;
-        nonMoneyWeightInput.value = 100 - moneyWeight;
+      function updateWeights(changed = "money") {
+        if (changed === "money") {
+          const moneyWeight = clamp(Number(moneyWeightInput.value || 0), 0, 100);
+          moneyWeightInput.value = moneyWeight;
+          nonMoneyWeightInput.value = 100 - moneyWeight;
+          return;
+        }
+
+        const nonMoneyWeight = clamp(Number(nonMoneyWeightInput.value || 0), 0, 100);
+        nonMoneyWeightInput.value = nonMoneyWeight;
+        moneyWeightInput.value = 100 - nonMoneyWeight;
       }
 
       function parseNumber(value) {
@@ -315,7 +322,12 @@
       });
 
       moneyWeightInput.addEventListener("input", () => {
-        updateWeights();
+        updateWeights("money");
+        calculate();
+      });
+
+      nonMoneyWeightInput.addEventListener("input", () => {
+        updateWeights("nonMoney");
         calculate();
       });
 
@@ -344,7 +356,7 @@
             nonMoney: Number(r.nonMoney) || 0,
             notes: r.notes || ""
           }));
-          moneyWeightInput.value = clamp(Number(payload.moneyWeight ?? 60), 0, 100);
+          moneyWeightInput.value = clamp(Number(payload.moneyWeight ?? 80), 0, 100);
           updateWeights();
           renderRows();
           status.textContent = `Loaded data (${payload.updatedAt || "unknown time"}).`;
