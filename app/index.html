@@ -131,6 +131,7 @@
           <tbody id="stakeholdersBody"></tbody>
         </table>
 
+        <div id="totalsSummary" class="small"></div>
         <div id="status" class="small"></div>
       </div>
 
@@ -147,6 +148,7 @@
       const resultCards = document.getElementById("resultCards");
       const validation = document.getElementById("validation");
       const status = document.getElementById("status");
+      const totalsSummary = document.getElementById("totalsSummary");
 
       const moneyWeightInput = document.getElementById("moneyWeight");
       const nonMoneyWeightInput = document.getElementById("nonMoneyWeight");
@@ -166,13 +168,26 @@
         nonMoneyWeightInput.value = 100 - moneyWeight;
       }
 
+      function parseNumber(value) {
+        const cleaned = String(value ?? "").replace(/,/g, "").trim();
+        const num = Number(cleaned);
+        return Number.isFinite(num) ? num : 0;
+      }
+
+      function formatNumber(value, maximumFractionDigits = 2) {
+        return Number(value || 0).toLocaleString(undefined, {
+          minimumFractionDigits: 0,
+          maximumFractionDigits
+        });
+      }
+
       function renderRows() {
         body.innerHTML = "";
         rows.forEach((row) => {
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td><input type="text" value="${escapeHtml(row.name)}" data-field="name" data-id="${row.id}"/></td>
-            <td><input type="number" min="0" step="0.01" value="${row.money}" data-field="money" data-id="${row.id}"/></td>
+            <td><input type="text" inputmode="decimal" value="${formatNumber(row.money)}" data-field="money" data-id="${row.id}"/></td>
             <td><input type="number" min="0" step="0.01" value="${row.nonMoney}" data-field="nonMoney" data-id="${row.id}"/></td>
             <td><input type="text" value="${escapeHtml(row.notes)}" data-field="notes" data-id="${row.id}"/></td>
             <td><button class="danger" data-delete="${row.id}">Delete</button></td>
@@ -200,12 +215,23 @@
             const target = rows.find((r) => r.id === id);
             if (!target) return;
 
-            if (field === "money" || field === "nonMoney") {
-              target[field] = Math.max(0, Number(e.target.value || 0));
+            if (field === "money") {
+              target.money = Math.max(0, parseNumber(e.target.value));
+            } else if (field === "nonMoney") {
+              target.nonMoney = Math.max(0, Number(e.target.value || 0));
             } else {
               target[field] = e.target.value;
             }
             calculate();
+          });
+        });
+
+        body.querySelectorAll('input[data-field="money"]').forEach((input) => {
+          input.addEventListener("blur", (e) => {
+            const id = e.target.dataset.id;
+            const target = rows.find((r) => r.id === id);
+            if (!target) return;
+            e.target.value = formatNumber(target.money);
           });
         });
 
@@ -247,6 +273,8 @@
       }
 
       function renderResults(result, meta) {
+        totalsSummary.textContent = `Totals — Monetary: ${formatNumber(meta.sumMoney)} | Non-monetary points: ${formatNumber(meta.sumNonMoney)}`;
+
         resultCards.innerHTML = "";
         for (const r of result) {
           const card = document.createElement("div");
