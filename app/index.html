@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Restaurant Project Share Calculator</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+      .app {
+        max-width: 1100px;
+        margin: 0 auto;
+        display: grid;
+        gap: 16px;
+      }
+      .card {
+        background: #111827;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 16px;
+      }
+      h1,h2 { margin: 0 0 8px; }
+      p { margin: 4px 0 0; color: #94a3b8; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+      }
+      th, td {
+        border-bottom: 1px solid #334155;
+        padding: 8px;
+        text-align: left;
+      }
+      input[type="text"], input[type="number"] {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        border-radius: 8px;
+        border: 1px solid #475569;
+        background: #0b1220;
+        color: #e2e8f0;
+      }
+      .row {
+        display: grid;
+        gap: 12px;
+      }
+      .row.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      button {
+        background: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      button.secondary { background: #475569; }
+      button.danger { background: #dc2626; }
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .pill {
+        background: #0b1220;
+        border: 1px solid #334155;
+        border-radius: 10px;
+        padding: 10px;
+      }
+      .small { font-size: 12px; color: #94a3b8; }
+      .error { color: #fca5a5; margin-top: 8px; }
+      .ok { color: #86efac; margin-top: 8px; }
+      @media (max-width: 800px) {
+        .summary { grid-template-columns: 1fr; }
+        .row.two { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="card">
+        <h1>Restaurant Share Calculator</h1>
+        <p>Split 100% ownership based on weighted monetary and non-monetary contributions.</p>
+      </div>
+
+      <div class="card">
+        <h2>Weights</h2>
+        <div class="row two">
+          <label>
+            Monetary weight (0-100)
+            <input id="moneyWeight" type="number" min="0" max="100" step="1" value="60" />
+          </label>
+          <label>
+            Non-monetary weight (0-100)
+            <input id="nonMoneyWeight" type="number" min="0" max="100" step="1" value="40" readonly />
+          </label>
+        </div>
+        <p class="small">Non-monetary weight auto-updates to keep total at 100.</p>
+      </div>
+
+      <div class="card">
+        <div class="actions">
+          <button id="addRow">+ Add stakeholder</button>
+          <button id="saveBtn" class="secondary">Save</button>
+          <button id="loadBtn" class="secondary">Load</button>
+          <button id="resetBtn" class="danger">Reset</button>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 25%">Name</th>
+              <th style="width: 20%">Monetary</th>
+              <th style="width: 20%">Non-monetary points</th>
+              <th style="width: 25%">Notes</th>
+              <th style="width: 10%">Action</th>
+            </tr>
+          </thead>
+          <tbody id="stakeholdersBody"></tbody>
+        </table>
+
+        <div id="status" class="small"></div>
+      </div>
+
+      <div class="card">
+        <h2>Results</h2>
+        <div class="summary" id="resultCards"></div>
+        <div id="validation"></div>
+      </div>
+    </div>
+
+    <script>
+      const STORAGE_KEY = "restaurant-share-calculator-v1";
+      const body = document.getElementById("stakeholdersBody");
+      const resultCards = document.getElementById("resultCards");
+      const validation = document.getElementById("validation");
+      const status = document.getElementById("status");
+
+      const moneyWeightInput = document.getElementById("moneyWeight");
+      const nonMoneyWeightInput = document.getElementById("nonMoneyWeight");
+
+      let rows = [
+        { id: crypto.randomUUID(), name: "Alice", money: 500000, nonMoney: 70, notes: "Chef + menu design" },
+        { id: crypto.randomUUID(), name: "Bob", money: 300000, nonMoney: 40, notes: "Operations" }
+      ];
+
+      function clamp(n, min, max) {
+        return Math.min(max, Math.max(min, n));
+      }
+
+      function updateWeights() {
+        const moneyWeight = clamp(Number(moneyWeightInput.value || 0), 0, 100);
+        moneyWeightInput.value = moneyWeight;
+        nonMoneyWeightInput.value = 100 - moneyWeight;
+      }
+
+      function renderRows() {
+        body.innerHTML = "";
+        rows.forEach((row) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><input type="text" value="${escapeHtml(row.name)}" data-field="name" data-id="${row.id}"/></td>
+            <td><input type="number" min="0" step="0.01" value="${row.money}" data-field="money" data-id="${row.id}"/></td>
+            <td><input type="number" min="0" step="0.01" value="${row.nonMoney}" data-field="nonMoney" data-id="${row.id}"/></td>
+            <td><input type="text" value="${escapeHtml(row.notes)}" data-field="notes" data-id="${row.id}"/></td>
+            <td><button class="danger" data-delete="${row.id}">Delete</button></td>
+          `;
+          body.appendChild(tr);
+        });
+        bindRowEvents();
+        calculate();
+      }
+
+      function escapeHtml(v = "") {
+        return String(v)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      function bindRowEvents() {
+        body.querySelectorAll("input").forEach((input) => {
+          input.addEventListener("input", (e) => {
+            const id = e.target.dataset.id;
+            const field = e.target.dataset.field;
+            const target = rows.find((r) => r.id === id);
+            if (!target) return;
+
+            if (field === "money" || field === "nonMoney") {
+              target[field] = Math.max(0, Number(e.target.value || 0));
+            } else {
+              target[field] = e.target.value;
+            }
+            calculate();
+          });
+        });
+
+        body.querySelectorAll("button[data-delete]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            rows = rows.filter((r) => r.id !== btn.dataset.delete);
+            renderRows();
+          });
+        });
+      }
+
+      function calculate() {
+        const moneyWeight = Number(moneyWeightInput.value) / 100;
+        const nonMoneyWeight = Number(nonMoneyWeightInput.value) / 100;
+
+        const sumMoney = rows.reduce((a, r) => a + (Number(r.money) || 0), 0);
+        const sumNonMoney = rows.reduce((a, r) => a + (Number(r.nonMoney) || 0), 0);
+
+        const raw = rows.map((r) => {
+          const moneyScore = sumMoney > 0 ? (Number(r.money) || 0) / sumMoney : 0;
+          const nonMoneyScore = sumNonMoney > 0 ? (Number(r.nonMoney) || 0) / sumNonMoney : 0;
+          const finalScore = moneyWeight * moneyScore + nonMoneyWeight * nonMoneyScore;
+          return { ...r, moneyScore, nonMoneyScore, finalScore, share: finalScore * 100 };
+        });
+
+        const rounded = raw.map((r) => ({ ...r, shareRounded: Number(r.share.toFixed(2)) }));
+        let roundedTotal = rounded.reduce((a, r) => a + r.shareRounded, 0);
+        const diff = Number((100 - roundedTotal).toFixed(2));
+
+        if (rounded.length > 0 && Math.abs(diff) >= 0.01) {
+          const maxIdx = rounded.reduce((maxI, item, idx, arr) =>
+            item.shareRounded > arr[maxI].shareRounded ? idx : maxI, 0
+          );
+          rounded[maxIdx].shareRounded = Number((rounded[maxIdx].shareRounded + diff).toFixed(2));
+          roundedTotal = rounded.reduce((a, r) => a + r.shareRounded, 0);
+        }
+
+        renderResults(rounded, { sumMoney, sumNonMoney, roundedTotal });
+      }
+
+      function renderResults(result, meta) {
+        resultCards.innerHTML = "";
+        for (const r of result) {
+          const card = document.createElement("div");
+          card.className = "pill";
+          card.innerHTML = `
+            <strong>${escapeHtml(r.name || "(Unnamed)")}</strong>
+            <div>Share: <strong>${r.shareRounded.toFixed(2)}%</strong></div>
+            <div class="small">Money score: ${(r.moneyScore * 100).toFixed(2)}%</div>
+            <div class="small">Non-money score: ${(r.nonMoneyScore * 100).toFixed(2)}%</div>
+          `;
+          resultCards.appendChild(card);
+        }
+
+        if (meta.sumMoney === 0 && meta.sumNonMoney === 0) {
+          validation.className = "error";
+          validation.textContent = "Cannot calculate: total monetary and non-monetary contributions are both zero.";
+          return;
+        }
+
+        if (rows.length === 0) {
+          validation.className = "error";
+          validation.textContent = "Add at least one stakeholder.";
+          return;
+        }
+
+        validation.className = "ok";
+        validation.textContent = `Total displayed share: ${meta.roundedTotal.toFixed(2)}%`;
+      }
+
+      document.getElementById("addRow").addEventListener("click", () => {
+        rows.push({ id: crypto.randomUUID(), name: "", money: 0, nonMoney: 0, notes: "" });
+        renderRows();
+      });
+
+      moneyWeightInput.addEventListener("input", () => {
+        updateWeights();
+        calculate();
+      });
+
+      document.getElementById("saveBtn").addEventListener("click", () => {
+        const payload = {
+          moneyWeight: Number(moneyWeightInput.value),
+          rows,
+          updatedAt: new Date().toISOString()
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        status.textContent = "Saved locally.";
+      });
+
+      document.getElementById("loadBtn").addEventListener("click", () => {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) {
+          status.textContent = "No saved data found.";
+          return;
+        }
+        try {
+          const payload = JSON.parse(raw);
+          rows = (payload.rows || []).map((r) => ({
+            id: r.id || crypto.randomUUID(),
+            name: r.name || "",
+            money: Number(r.money) || 0,
+            nonMoney: Number(r.nonMoney) || 0,
+            notes: r.notes || ""
+          }));
+          moneyWeightInput.value = clamp(Number(payload.moneyWeight ?? 60), 0, 100);
+          updateWeights();
+          renderRows();
+          status.textContent = `Loaded data (${payload.updatedAt || "unknown time"}).`;
+        } catch (e) {
+          status.textContent = "Failed to load saved data.";
+        }
+      });
+
+      document.getElementById("resetBtn").addEventListener("click", () => {
+        if (!confirm("Reset all stakeholder data?")) return;
+        rows = [];
+        renderRows();
+        status.textContent = "Cleared current data.";
+      });
+
+      updateWeights();
+      renderRows();
+    </script>
+  </body>
+</html>
